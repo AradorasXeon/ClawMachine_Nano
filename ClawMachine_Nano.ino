@@ -102,33 +102,33 @@ void MoveLeft()
 void MoveRight()
 {
   msgMove.setRight();
-  FillStripPart(255, 0, 0, LED_RIGHT_MIN, LED_RIGHT_MAX);
+  FillStripPart(0, 255, 0, LED_RIGHT_MIN, LED_RIGHT_MAX);
 
 }
 
 void MoveUp()
 {
   msgMove.setUp();
-  FillStripPart(0, 0, 255, LED_UP_MIN, LED_UP_MAX);
+  FillStripPart(0, 255, 0, LED_UP_MIN, LED_UP_MAX);
 
 }
 
 void MoveDown()
 {
   msgMove.setDown();
-  FillStripPart(0, 255, 255, LED_DOWN_MIN, LED_DOWN_MAX);
+  FillStripPart(0, 255, 0, LED_DOWN_MIN, LED_DOWN_MAX);
 }
 
 //stops inputs for a while
 void ClawAction()
 {
   msgMove.setClawDown();
-  msgMove.sendMsg();
+  msgMove.sendMsg(COMMUNICATION_MOVEMENT);
   LedClawAction(); //contains delay have to send msg beforehand!
   digitalWrite(CLAW_PIN, HIGH); //Closes claw
-  FillStripPart(255, 255, 0, 0, LED_LAST); //White light to see everything nice and clear
+  FillStripPart(255, 255, 255, 0, LED_LAST); //White light to see everything nice and clear
   msgMove.setClawUp();
-  msgMove.sendMsg();
+  msgMove.sendMsg(COMMUNICATION_MOVEMENT);
   delay(2000); //will see the numbers
   //will need some iteration
   msgMove.setLeft();
@@ -171,6 +171,6 @@ void loop()
 {
   msgMove.setDefaultValues();
   refreshButtonState();
-  msgMove.sendMsg();
+  msgMove.sendMsg(COMMUNICATION_MOVEMENT);
   FillStripPart(1, 1, 1, 0, LED_LAST);
 }
