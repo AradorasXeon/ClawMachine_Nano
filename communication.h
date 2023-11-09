@@ -26,6 +26,17 @@ enum class Claw_Direction : uint8_t
     CLAW_UP = 255
 };
 
+enum Claw_Calibration : uint8_t //last time it only built if this was after the operators, now only this .... -.-
+{
+    CLAW_CALIB_IDLE_STATE = 0,
+    CLAW_CALIB_INIT = 1,
+    CLAW_CALIB_TOP_STATE_IN_PROGRESS = 6,
+    CLAW_CALIB_DOWN_STATE_IN_PROGRESS = 14,
+    CLAW_CALIB_BAD = 32,
+    CLAW_CALIB_TOP_DONE = 64,
+    CLAW_CALIB_DOWN_DONE = 128
+};
+
 Claw_Calibration operator|(Claw_Calibration left, Claw_Calibration right)
 {
     return static_cast<Claw_Calibration>(static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
@@ -41,24 +52,19 @@ Claw_Calibration operator~(Claw_Calibration input)
     return static_cast<Claw_Calibration>(~static_cast<uint8_t>(input));
 }
 
-enum Claw_Calibration : uint8_t
-{
-    CLAW_CALIB_IDLE_STATE = 0,
-    CLAW_CALIB_INIT = 1,
-    CLAW_CALIB_TOP_STATE_IN_PROGRESS = 6,
-    CLAW_CALIB_DOWN_STATE_IN_PROGRESS = 14,
-    CLAW_CALIB_BAD = 32,
-    CLAW_CALIB_TOP_DONE = 64,
-    CLAW_CALIB_DOWN_DONE = 128
-};
-
-
-
 enum class Main_Button : uint8_t
 {
     NOT_PUSHED = 0,
     PUSHED = 255
 };
+
+
+struct MovementDataPack
+{
+    Claw_Calibration calibState;
+    int zDirectionMaxStepCountRange;
+};
+
 
 class Move
 {
@@ -66,6 +72,7 @@ class Move
     Move(bool isMaster);
 
     void sendMsg(uint8_t msgType);
+    void readFromSlave();
     void setDefaultValues();
 
     void setLeft();
@@ -87,25 +94,30 @@ class Move
     void unsetBadCalibState();
 
 
+    void refreshMovementState(int currentZstepState);
 
-    void readMsg(int byteCount);
 
     X_Direction getX();
     Y_Direction getY();
     Claw_Direction getClaw();
     Claw_Calibration getClawCalibState();
     Main_Button getButtonState();
+    MovementDataPack getMovementState();
 
     static Move* instance; //for wire library hack
 
     static void onReceiveCallBack(int byteCount);
 
     private:
+    void readMsg(int byteCount);
+
     X_Direction _x = X_Direction::IDLE_X;
     Y_Direction _y = Y_Direction::IDLE_Y;
     Claw_Direction _claw = Claw_Direction::IDLE_CLAW;
     Claw_Calibration _clawCalibState = Claw_Calibration::CLAW_CALIB_IDLE_STATE;
     Main_Button _mainButton = Main_Button::NOT_PUSHED;
+    MovementDataPack _movementMessage;
+
 };
 
     ///@brief This is to hack the Wire.onReceive function, should be used ike: Wire.onReceive(Move::onReceiveCallBack); 
@@ -118,8 +130,22 @@ class Move
     }
 
 
+    ///@returns the calibration state struct of the claw, used for i2c read from motor ctl
+    MovementDataPack Move::getMovementState()
+    {
+        return _movementMessage;
+    }
+
+    /// @brief refreshes the claw calibration state
+    /// @param currentZstepState give here the zDirectionMaxStepCountRange from the UNO side
+    void Move::refreshMovementState(int currentZstepState)
+    {
+        _movementMessage.calibState = getClawCalibState();
+        _movementMessage.zDirectionMaxStepCountRange = currentZstepState;
+    }
+
     /// @brief ctor for the Move com interface
-    /// @param isMaster true if this is the i2c master
+    /// @param isMaster true if this is the i2c master(nano)
     Move::Move(bool isMaster)
     {
         setDefaultValues();
@@ -156,6 +182,14 @@ class Move
         
         Wire.endTransmission(true);
         delay(2);
+    }
+
+    /// @brief reads the msg on i2c from UNO to NANO about movement
+    void Move::readFromSlave()
+    {
+        Wire.requestFrom(I2C_MOTOR_CTRL_ADDRESS, sizeof(MovementDataPack), true);
+        Wire.readBytes((byte*) &_movementMessage, sizeof(MovementDataPack));
+        //delay(1);
     }
 
     void Move::readMsg(int byteCount)
@@ -251,48 +285,49 @@ class Move
         _mainButton = Main_Button::NOT_PUSHED;
     }
 
-    ///@brief auto calss startTopCalib()
+    ///@brief 
     void Move::initCalibration()
     {
         _clawCalibState = Claw_Calibration::CLAW_CALIB_INIT;
-        startTopCalib();
+        //startTopCalib();
     }
 
     void Move::startTopCalib()
     {
-        _clawCalibState = ~CLAW_CALIB_TOP_DONE & _clawCalibState; //making sure to remove top calib done state
-        _clawCalibState = _clawCalibState | CLAW_CALIB_TOP_STATE_IN_PROGRESS; //short hand gave error for some reason ?!
+        _clawCalibState = static_cast<Claw_Calibration>(~Claw_Calibration::CLAW_CALIB_TOP_DONE & _clawCalibState); //making sure to remove top calib done state
+        _clawCalibState = static_cast<Claw_Calibration>(_clawCalibState | Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS); //short hand gave error for some reason ?!
     }
 
     void Move::topCalibDone()
     {
-        _clawCalibState = ~CLAW_CALIB_TOP_STATE_IN_PROGRESS & _clawCalibState; //since we are done
-        _clawCalibState = _clawCalibState | CLAW_CALIB_TOP_DONE;
+        _clawCalibState = static_cast<Claw_Calibration>(~Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS & _clawCalibState); //since we are done
+        _clawCalibState = static_cast<Claw_Calibration>(_clawCalibState | Claw_Calibration::CLAW_CALIB_TOP_DONE);
     }
 
     void Move::startDownCalib()
     {
-        _clawCalibState = ~CLAW_CALIB_DOWN_DONE & _clawCalibState;
-        _clawCalibState = _clawCalibState | CLAW_CALIB_DOWN_STATE_IN_PROGRESS;
+        _clawCalibState = static_cast<Claw_Calibration>(~Claw_Calibration::CLAW_CALIB_DOWN_DONE & _clawCalibState);
+        _clawCalibState = static_cast<Claw_Calibration>(_clawCalibState | Claw_Calibration::CLAW_CALIB_DOWN_STATE_IN_PROGRESS);
     }
 
     void Move::downCalibDone()
     {
-        _clawCalibState = ~CLAW_CALIB_DOWN_STATE_IN_PROGRESS & _clawCalibState; //since we are done
-        _clawCalibState = _clawCalibState | CLAW_CALIB_DOWN_DONE;
+        _clawCalibState = static_cast<Claw_Calibration>(~Claw_Calibration::CLAW_CALIB_DOWN_STATE_IN_PROGRESS & _clawCalibState); //since we are done
+        _clawCalibState = static_cast<Claw_Calibration>(_clawCalibState | Claw_Calibration::CLAW_CALIB_DOWN_DONE);
     }
 
     void Move::finishCalibration()
     {
-        _clawCalibState = ~CLAW_CALIB_INIT & _clawCalibState;
+        _clawCalibState = static_cast<Claw_Calibration>(~Claw_Calibration::CLAW_CALIB_INIT & _clawCalibState); //clears init state
+        //down and top done should already be set here
     }
 
     void Move::setBadCalibState()
     {
-        _clawCalibState = CLAW_CALIB_BAD & _clawCalibState;
+        _clawCalibState = static_cast<Claw_Calibration>(Claw_Calibration::CLAW_CALIB_BAD & _clawCalibState);
     }
 
     void Move::unsetBadCalibState()
     {
-        _clawCalibState = ~CLAW_CALIB_BAD & _clawCalibState;
+        _clawCalibState = static_cast<Claw_Calibration>(~Claw_Calibration::CLAW_CALIB_BAD & _clawCalibState);
     }
