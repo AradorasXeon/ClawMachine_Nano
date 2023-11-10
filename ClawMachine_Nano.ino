@@ -131,35 +131,34 @@ void setup()
 void MoveLeft()
 {
   msgMove.setLeft();
-  FillStripPart(0, 255, 0, LED_LEFT_MIN, LED_LEFT_MAX);
+  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_LEFT_MIN, LED_LEFT_MAX);
 }
 
 void MoveRight()
 {
   msgMove.setRight();
-  FillStripPart(0, 255, 0, LED_RIGHT_MIN, LED_RIGHT_MAX);
-
+  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_RIGHT_MIN, LED_RIGHT_MAX);
 }
 
 void MoveUp()
 {
   msgMove.setUp();
-  FillStripPart(0, 255, 0, LED_UP_MIN, LED_UP_MAX);
-
+  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_UP_MIN, LED_UP_MAX);
 }
 
 void MoveDown()
 {
   msgMove.setDown();
-  FillStripPart(0, 255, 0, LED_DOWN_MIN, LED_DOWN_MAX);
+  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_DOWN_MIN, LED_DOWN_MAX);
 }
 
 //stops inputs for a while
 void ClawAction()
 {
-  /*
-  msgMove.setClawDown();
+  //msgMove.setClawDown();
+  msgMove.setButtonPushed();
   msgMove.sendMsg(COMMUNICATION_MOVEMENT);
+  /* for now switch it off
   LedClawAction(); //contains delay have to send msg beforehand!
   digitalWrite(CLAW_PIN, HIGH); //Closes claw
   FillStripPart(255, 255, 255, 0, LED_LAST); //White light to see everything nice and clear
@@ -209,14 +208,33 @@ void doCalibration()
   //give some indication that calibration has started
   FillStripPart(19, 0, 255, 0, LED_LAST);
 
-  while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE | Claw_Calibration::CLAW_CALIB_BAD))
+  while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
     delay(CALIB_MSG_WRITE_READ_MILISECONDS); //we only read after some ms so and repeat, 
-    msgMove.readFromSlave();
+    msgMove.readFromSlave(); //we will need this for time estimation
+    msgMove.setDefaultValues();
     refreshButtonState();
     msgMove.sendMsg(COMMUNICATION_MOVEMENT); //we also have to put out the movement commands
+  //test
+  FillStripPart(80, 80, 0, 0, LED_LAST);
+
+    if(msgMove.getButtonState() == Main_Button::PUSHED) 
+    { //I should make the following lines into a function later
+      DONE_TOP:
+      msgMove.topCalibDone();
+      msgMove.sendMsg(COMMUNICATION_CALIBRATION);
+      delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
+      msgMove.readFromSlave();
+      //test
+    FillStripPart(0, 80, 80, 0, LED_LAST);
+
+      if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE)) goto DONE_TOP;
+    }
   }
   //we exit while loop when something is bad or CALIB TOP IS DONE
+
+  //test
+    FillStripPart(0, 255, 80, 0, LED_LAST);
 
   if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
   {
@@ -227,6 +245,9 @@ void doCalibration()
   {
     zCurrentlyAt = 0; //do we need this here?
     START_DOWN_CALIB:
+  //test
+    FillStripPart(0, 20, 255, 0, LED_LAST);
+
     msgMove.startDownCalib();
     msgMove.sendMsg(COMMUNICATION_CALIBRATION);
     delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
@@ -236,12 +257,22 @@ void doCalibration()
     //give indication of that calibration is in the next phase
     FillStripPart(80, 0, 255, 0, LED_LAST);
 
-    while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE | Claw_Calibration::CLAW_CALIB_BAD))
+    while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
       delay(CALIB_MSG_WRITE_READ_MILISECONDS);
       msgMove.readFromSlave();
+      msgMove.setDefaultValues();
       refreshButtonState();
       msgMove.sendMsg(COMMUNICATION_MOVEMENT);
+      if(msgMove.getButtonState() == Main_Button::PUSHED) 
+      { //I should make the following lines into a function later
+        DONE_DOWN:
+        msgMove.downCalibDone();
+        msgMove.sendMsg(COMMUNICATION_CALIBRATION);
+        delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
+        msgMove.readFromSlave();
+        if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE)) goto DONE_DOWN;
+      }
     }
     //we exit while loop when something is bad or CALIB DOWN IS DONE
     if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
