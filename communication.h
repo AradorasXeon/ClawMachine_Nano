@@ -1,4 +1,5 @@
 #include <Wire.h>
+#include "millisTimer.h"
 
 #define COMMUNICATION_MOVEMENT 0u
 #define COMMUNICATION_CALIBRATION 1u
@@ -117,6 +118,7 @@ class Move
     Claw_Calibration _clawCalibState = Claw_Calibration::CLAW_CALIB_IDLE_STATE;
     Main_Button _mainButton = Main_Button::NOT_PUSHED;
     MovementDataPack _movementMessage;
+    MillisTimer timer; //cleaning up remnant delay functions
 
 };
 
@@ -146,7 +148,7 @@ class Move
 
     /// @brief ctor for the Move com interface
     /// @param isMaster true if this is the i2c master(nano)
-    Move::Move(bool isMaster)
+    Move::Move(bool isMaster) : timer(2)
     {
         setDefaultValues();
         if(isMaster)
@@ -181,7 +183,10 @@ class Move
         }
         
         Wire.endTransmission(true);
-        delay(2);
+        timer.doDelay();
+        #ifdef DEBUG
+        Serial.println("MOVE -- Done Writing to SLAVE");
+        #endif // DEBUG
     }
 
     /// @brief reads the msg on i2c from UNO to NANO about movement
@@ -189,7 +194,10 @@ class Move
     {
         Wire.requestFrom(I2C_MOTOR_CTRL_ADDRESS, sizeof(MovementDataPack), true);
         Wire.readBytes((byte*) &_movementMessage, sizeof(MovementDataPack));
-        //delay(1);
+        timer.doDelay();
+        #ifdef DEBUG
+        Serial.println("MOVE / DATA_PACK -- Done reading from SLAVE");
+        #endif // DEBUG
     }
 
     void Move::readMsg(int byteCount)
@@ -209,7 +217,9 @@ class Move
         default:
             break;
         }
-        
+        #ifdef DEBUG
+        Serial.println("MOVE / direction -- Done reading from MASTER");
+        #endif // DEBUG
     }
     
     void Move::setDefaultValues()

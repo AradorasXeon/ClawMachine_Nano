@@ -1,3 +1,5 @@
+#define DEBUG
+
 #include <Adafruit_NeoPixel.h>
 #include "communication.h"
 #include "timer.h"
@@ -32,6 +34,7 @@
 #define START_UP_CALIB_TIME_MS 3000
 #define CALIB_MSG_DELAY_MICROSECONDS 2500 //for resending msg
 #define CALIB_MSG_WRITE_READ_MILLISECONDS 100 //amount of time between reads
+
 
 // IMPORTANT: To reduce NeoPixel burnout risk, add 1000 uF capacitor across
 // pixel power leads, add 300 - 500 Ohm resistor on first pixel's data input
@@ -118,6 +121,12 @@ void setup()
   FillStripPart(1, 1, 1, 0, LED_LAST);
 
   strip.show(); // Initialize all pixels to 'off'
+  //Debug:
+  #ifdef DEBUG
+  Serial.begin(115200);
+  Serial.println("BASE SETUP RAN");
+  #endif // DEBUG
+  
 
   //Calibration init
   int time = millis();
@@ -203,6 +212,9 @@ void sendCheckCalibState(Move &moveObject, void (Move::*function)(), Claw_Calibr
     //timerCalibMicro.doDelay();
     timerCalibReadWrite.doDelay();
     msgMove.readFromSlave();
+    #ifdef DEBUG
+    Serial.println("sendCheckCalibState");
+    #endif // DEBUG
   }
 }
 
@@ -236,7 +248,9 @@ void doCalibration()
     }
   }
   //we exit while loop when something is bad or CALIB TOP IS DONE
-
+  #ifdef DEBUG
+  Serial.println("CALIB TOP IS DONE ---------- OR BAD CALIB");
+  #endif // DEBUG
   //test
     FillStripPart(0, 255, 80, 0, LED_LAST);
 
@@ -270,8 +284,10 @@ void doCalibration()
       }
     }
 
-
     //we exit while loop when something is bad or CALIB DOWN IS DONE
+    #ifdef DEBUG
+    Serial.println("CALIB DOWN IS DONE ---------- OR BAD CALIB");
+    #endif // DEBUG
     if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
     {
       //do some error handling stuff

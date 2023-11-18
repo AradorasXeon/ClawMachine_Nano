@@ -1,4 +1,6 @@
 //Implementing own timer function, because I suspect that I have freezes because i2c wants to communicate at some delay
+#ifndef MILLIS_TIMER_H
+#define MILLIS_TIMER_H
 
 class MillisTimer
 {
@@ -39,3 +41,7 @@ void MillisTimer::doDelay()
     }
 
 }
+
+
+
+#endif // !MILLIS_TIMER_H

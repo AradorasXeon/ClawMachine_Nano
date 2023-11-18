@@ -1,5 +1,7 @@
 //Implementing own timer function, because I suspect that I have freezes because i2c wants to communicate at some delay
 
+#ifndef MICROS_TIMER_H
+#define MICROS_TIMER_H
 class Timer
 {
     public:
@@ -39,3 +41,5 @@ void Timer::doDelay()
     }
 
 }
+
+#endif // !MICROS_TIMER_H
