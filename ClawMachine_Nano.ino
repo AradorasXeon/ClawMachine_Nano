@@ -1,5 +1,7 @@
 #include <Adafruit_NeoPixel.h>
 #include "communication.h"
+#include "timer.h"
+#include "millisTimer.h"
 
 #ifdef __AVR__
   #include <avr/power.h>
@@ -28,8 +30,8 @@
 #define LED_BRIGHTNESS 50
 
 #define START_UP_CALIB_TIME_MS 3000
-#define CALIB_MSG_DELAY_MICROSECONDS 200 //for resending msg
-#define CALIB_MSG_WRITE_READ_MILISECONDS 10 //amount of time between reads
+#define CALIB_MSG_DELAY_MICROSECONDS 2500 //for resending msg
+#define CALIB_MSG_WRITE_READ_MILLISECONDS 100 //amount of time between reads
 
 // IMPORTANT: To reduce NeoPixel burnout risk, add 1000 uF capacitor across
 // pixel power leads, add 300 - 500 Ohm resistor on first pixel's data input
@@ -43,6 +45,8 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_LAST, LED_PIN, NEO_GRB + NEO_KHZ
 //100 LEDs @100 strength white about 1310 mA
 
 Move msgMove(true);
+MillisTimer timerCalibReadWrite(CALIB_MSG_WRITE_READ_MILLISECONDS);
+Timer timerCalibMicro(CALIB_MSG_DELAY_MICROSECONDS);
 
 /// @brief Fills part of the actual Adafruit_NeoPixel led strip
 /// @param r red
@@ -186,49 +190,49 @@ bool containsGivenBits(uint8_t inThis, uint8_t contained)
   }
 }
 
+/// @brief THIS WILL NOT RETURN until it was verified that the message got to target IC
+/// @param moveObject the Move object on which we want to call function
+/// @param function this function of the Move object will be called
+/// @param calbiStateToCheck function will not return untill this calibration state is read from target IC
+void sendCheckCalibState(Move &moveObject, void (Move::*function)(), Claw_Calibration calbiStateToCheck)
+{
+  while(!containsGivenBits(msgMove.getMovementState().calibState, calbiStateToCheck))
+  {
+    (moveObject.*function)();
+    moveObject.sendMsg(COMMUNICATION_CALIBRATION);
+    //timerCalibMicro.doDelay();
+    timerCalibReadWrite.doDelay();
+    msgMove.readFromSlave();
+  }
+}
+
 void doCalibration()
 {
-  INIT_CALIB:
-  msgMove.initCalibration();
-  msgMove.sendMsg(COMMUNICATION_CALIBRATION);
-  delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS); //watch out for LTO might need to change Arduino.h
-  msgMove.readFromSlave();
-  //check if msg got through if not send again
-  if (msgMove.getMovementState().calibState != Claw_Calibration::CLAW_CALIB_INIT) goto INIT_CALIB;
+  //INIT CALIB
+  sendCheckCalibState(msgMove, &Move::initCalibration, Claw_Calibration::CLAW_CALIB_INIT);
 
+  //START_TOP_CALIB:
+  sendCheckCalibState(msgMove, &Move::startTopCalib, Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS);
 
-
-  START_TOP_CALIB:
-  msgMove.startTopCalib();
-  msgMove.sendMsg(COMMUNICATION_CALIBRATION);
-  delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
-  msgMove.readFromSlave();
-  //check if msg got through if not send again
-  if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS)) goto START_TOP_CALIB;
   //give some indication that calibration has started
   FillStripPart(19, 0, 255, 0, LED_LAST);
 
   while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
-    delay(CALIB_MSG_WRITE_READ_MILISECONDS); //we only read after some ms so and repeat, 
+    timerCalibReadWrite.doDelay(); //we only read after some ms so and repeat, 
     msgMove.readFromSlave(); //we will need this for time estimation
     msgMove.setDefaultValues();
     refreshButtonState();
     msgMove.sendMsg(COMMUNICATION_MOVEMENT); //we also have to put out the movement commands
   //test
-  FillStripPart(80, 80, 0, 0, LED_LAST);
 
     if(msgMove.getButtonState() == Main_Button::PUSHED) 
-    { //I should make the following lines into a function later
-      DONE_TOP:
-      msgMove.topCalibDone();
-      msgMove.sendMsg(COMMUNICATION_CALIBRATION);
-      delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
-      msgMove.readFromSlave();
-      //test
-    FillStripPart(0, 80, 80, 0, LED_LAST);
+    { 
+      FillStripPart(255, 0, 0, 0, LED_LAST);
+      delay(2500);
 
-      if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE)) goto DONE_TOP;
+      //DONE TOP -- this will escape the while loop:
+      sendCheckCalibState(msgMove, &Move::topCalibDone, Claw_Calibration::CLAW_CALIB_TOP_DONE);
     }
   }
   //we exit while loop when something is bad or CALIB TOP IS DONE
@@ -244,36 +248,29 @@ void doCalibration()
   else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
     zCurrentlyAt = 0; //do we need this here?
-    START_DOWN_CALIB:
-  //test
-    FillStripPart(0, 20, 255, 0, LED_LAST);
+    //START_DOWN_CALIB:
+    sendCheckCalibState(msgMove, &Move::startDownCalib, Claw_Calibration::CLAW_CALIB_DOWN_STATE_IN_PROGRESS);
 
-    msgMove.startDownCalib();
-    msgMove.sendMsg(COMMUNICATION_CALIBRATION);
-    delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
-    msgMove.readFromSlave();
-    //check if msg got through if not send again
-    if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_STATE_IN_PROGRESS)) goto START_DOWN_CALIB;
     //give indication of that calibration is in the next phase
     FillStripPart(80, 0, 255, 0, LED_LAST);
 
     while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
-      delay(CALIB_MSG_WRITE_READ_MILISECONDS);
+      timerCalibReadWrite.doDelay();
       msgMove.readFromSlave();
       msgMove.setDefaultValues();
       refreshButtonState();
       msgMove.sendMsg(COMMUNICATION_MOVEMENT);
       if(msgMove.getButtonState() == Main_Button::PUSHED) 
-      { //I should make the following lines into a function later
-        DONE_DOWN:
-        msgMove.downCalibDone();
-        msgMove.sendMsg(COMMUNICATION_CALIBRATION);
-        delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
-        msgMove.readFromSlave();
-        if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE)) goto DONE_DOWN;
+      {
+        FillStripPart(255, 0, 0, 0, LED_LAST);
+        delay(2500);
+        //DONE_DOWN -- this will escape the while loop:
+        sendCheckCalibState(msgMove, &Move::downCalibDone, Claw_Calibration::CLAW_CALIB_DOWN_DONE);
       }
     }
+
+
     //we exit while loop when something is bad or CALIB DOWN IS DONE
     if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
     {
@@ -284,13 +281,8 @@ void doCalibration()
     else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
       //when we get here TOP is already done, and DOWN was just done
-      CALIB_DONE:
-      msgMove.finishCalibration(); //after this is sent UNO can move normaly (x and y direction enabled again)
-      msgMove.sendMsg(COMMUNICATION_CALIBRATION);
-      //now we should check if UNO got the message
-      delayMicroseconds(CALIB_MSG_DELAY_MICROSECONDS);
-      msgMove.readFromSlave();
-      if (!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE | Claw_Calibration::CLAW_CALIB_TOP_DONE)) goto CALIB_DONE;
+      //CALIB_DONE:
+      sendCheckCalibState(msgMove, &Move::finishCalibration, (Claw_Calibration::CLAW_CALIB_DOWN_DONE | Claw_Calibration::CLAW_CALIB_TOP_DONE));
     }
   }
 }
