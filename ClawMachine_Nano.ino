@@ -2,6 +2,7 @@
 
 #include <Adafruit_NeoPixel.h>
 #include "communication.h"
+#include "communicationMusic.h"
 #include "timer.h"
 #include "millisTimer.h"
 
@@ -48,6 +49,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_LAST, LED_PIN, NEO_GRB + NEO_KHZ
 //100 LEDs @100 strength white about 1310 mA
 
 Move msgMove(true);
+Music msgMusic(true);
 MillisTimer timerCalibReadWrite(CALIB_MSG_WRITE_READ_MILLISECONDS);
 Timer timerCalibMicro(CALIB_MSG_DELAY_MICROSECONDS);
 
@@ -134,6 +136,7 @@ void setup()
   {
     //maybe some skip possibilities here later
     //probably if something pressed then set a boolean
+    //don't forget to start gameplay music as well, if no calibration is done
   }
   doCalibration();
   FillStripPartSlow(180, 0, 255, 0, LED_LAST);
@@ -168,6 +171,8 @@ void MoveDown()
 //stops inputs for a while
 void ClawAction()
 {
+  msgMusic.setClawActionMusic();
+  msgMusic.sendMsg();
   //msgMove.setClawDown();
   msgMove.setButtonPushed();
   msgMove.sendMsg(COMMUNICATION_MOVEMENT);
@@ -184,6 +189,12 @@ void ClawAction()
   //end of iteration
   digitalWrite(CLAW_PIN, LOW); //Opens claw
   */
+ //somewhere after homing to drop point
+  msgMusic.setPrizeDropMusic();
+  msgMusic.sendMsg();
+ // wait
+  msgMusic.setGamePlayMusic();
+  msgMusic.sendMsg();
 }
 
 bool containsGivenBits(uint8_t inThis, uint8_t contained)
@@ -222,6 +233,8 @@ void doCalibration()
 {
   //INIT CALIB
   sendCheckCalibState(msgMove, &Move::initCalibration, Claw_Calibration::CLAW_CALIB_INIT);
+  msgMusic.setCalibrationMusic();
+  msgMusic.sendMsg();
 
   //START_TOP_CALIB:
   sendCheckCalibState(msgMove, &Move::startTopCalib, Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS);
@@ -299,6 +312,8 @@ void doCalibration()
       //when we get here TOP is already done, and DOWN was just done
       //CALIB_DONE:
       sendCheckCalibState(msgMove, &Move::finishCalibration, (Claw_Calibration::CLAW_CALIB_DOWN_DONE | Claw_Calibration::CLAW_CALIB_TOP_DONE));
+      msgMusic.setGamePlayMusic();
+      msgMusic.sendMsg();
     }
   }
 }
