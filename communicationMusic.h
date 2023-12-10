@@ -16,7 +16,7 @@ class Music
     public:
     Music(bool isMaster);
     void sendMsg();
-    void onReceiveCallBack(int byteCount);
+    static void onReceiveCallBack(int byteCount);
 
     void setCalibrationMusic();
     void setGamePlayMusic();
@@ -98,4 +98,10 @@ void Music::setClawActionMusic()
 void Music::setPrizeDropMusic()
 {
     _music = CurrentMusic::PRIZE_DROP;
+}
+
+/// @brief Gets the actual music
+CurrentMusic Music::getMusicToPlay()
+{
+    return _music;
 }
