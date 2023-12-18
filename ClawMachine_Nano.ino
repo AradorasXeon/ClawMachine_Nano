@@ -53,6 +53,10 @@ Music msgMusic(true);
 MillisTimer timerCalibReadWrite(CALIB_MSG_WRITE_READ_MILLISECONDS);
 Timer timerCalibMicro(CALIB_MSG_DELAY_MICROSECONDS);
 
+#ifdef DEBUG
+MillisTimer timer5seconds(5000);
+#endif // DEBUG
+
 /// @brief Fills part of the actual Adafruit_NeoPixel led strip
 /// @param r red
 /// @param g green
@@ -129,6 +133,15 @@ void setup()
   Serial.println("BASE SETUP RAN");
   #endif // DEBUG
   
+    #ifdef DEBUG
+    Serial.println("Music test");
+    msgMusic.setCalibrationMusic();
+    Serial.println("SET");
+
+    msgMusic.sendMsg();
+    Serial.println("Music test SENT");
+
+    #endif // DEBUG
 
   //Calibration init
   int time = millis();
@@ -190,9 +203,15 @@ void ClawAction()
   digitalWrite(CLAW_PIN, LOW); //Opens claw
   */
  //somewhere after homing to drop point
+  #ifdef DEBUG
+  timer5seconds.doDelay();
+  #endif // DEBUG
   msgMusic.setPrizeDropMusic();
   msgMusic.sendMsg();
  // wait
+ #ifdef DEBUG
+  timer5seconds.doDelay();
+  #endif // DEBUG
   msgMusic.setGamePlayMusic();
   msgMusic.sendMsg();
 }
@@ -232,9 +251,10 @@ void sendCheckCalibState(Move &moveObject, void (Move::*function)(), Claw_Calibr
 void doCalibration()
 {
   //INIT CALIB
-  sendCheckCalibState(msgMove, &Move::initCalibration, Claw_Calibration::CLAW_CALIB_INIT);
   msgMusic.setCalibrationMusic();
   msgMusic.sendMsg();
+  sendCheckCalibState(msgMove, &Move::initCalibration, Claw_Calibration::CLAW_CALIB_INIT);
+  
 
   //START_TOP_CALIB:
   sendCheckCalibState(msgMove, &Move::startTopCalib, Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS);
