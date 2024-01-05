@@ -1,4 +1,5 @@
 #define DEBUG
+//#define MUSIC
 
 #include <Adafruit_NeoPixel.h>
 #include "communication.h"
@@ -21,13 +22,13 @@
 
 //nth LED, we can use these to light up appropaite LEDs for left, right, up, down movements
 #define LED_LEFT_MIN 0
-#define LED_LEFT_MAX 10
-#define LED_RIGHT_MIN 11
-#define LED_RIGHT_MAX 20
-#define LED_UP_MIN 21
-#define LED_UP_MAX 30
-#define LED_DOWN_MIN 31
-#define LED_DOWN_MAX 40
+#define LED_LEFT_MAX 20
+#define LED_RIGHT_MIN 21
+#define LED_RIGHT_MAX 40
+#define LED_UP_MIN 41
+#define LED_UP_MAX 60
+#define LED_DOWN_MIN 61
+#define LED_DOWN_MAX 80
 
 #define LED_LAST 88
 #define LED_BRIGHTNESS 50
@@ -35,6 +36,10 @@
 #define START_UP_CALIB_TIME_MS 3000
 #define CALIB_MSG_DELAY_MICROSECONDS 2500 //for resending msg
 #define CALIB_MSG_WRITE_READ_MILLISECONDS 100 //amount of time between reads
+#define CALIB_LED_TIMER_MS 1500 //amount of time between calibration states
+#define LED_DELAY_MS 1
+#define LED_LONG_DELAY_MS 40
+
 
 
 // IMPORTANT: To reduce NeoPixel burnout risk, add 1000 uF capacitor across
@@ -49,8 +54,15 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_LAST, LED_PIN, NEO_GRB + NEO_KHZ
 //100 LEDs @100 strength white about 1310 mA
 
 Move msgMove(true);
-Music msgMusic(true);
+#ifdef MUSIC
+  Music msgMusic(true);
+#endif // MUSIC
+
 MillisTimer timerCalibReadWrite(CALIB_MSG_WRITE_READ_MILLISECONDS);
+MillisTimer timerCalibLED(CALIB_LED_TIMER_MS);
+MillisTimer timerLEDdelay(LED_DELAY_MS);
+MillisTimer timerLEDlongDelay(LED_LONG_DELAY_MS);
+
 Timer timerCalibMicro(CALIB_MSG_DELAY_MICROSECONDS);
 
 #ifdef DEBUG
@@ -69,7 +81,7 @@ void FillStripPart(uint8_t r, uint8_t g, uint8_t b, uint16_t startLed, uint16_t 
   for(uint16_t i=startLed; i<=endLed; i++) 
   {
     strip.setPixelColor(i, strip.Color(r, g, b));
-    delay(1);
+    timerLEDdelay.doDelay();
   }
 
   strip.show();
@@ -87,10 +99,22 @@ void FillStripPartSlow(uint8_t r, uint8_t g, uint8_t b, uint16_t startLed, uint1
   for(uint16_t i=startLed; i<=endLed; i++) 
   {
     strip.setPixelColor(i, strip.Color(r, g, b));
-    delay(40);
+    timerLEDlongDelay.doDelay();
   }
 
   strip.show();
+}
+
+void ErrorLed()
+{
+  while (1) //delibaretly not exiting from here, while debugging
+  {
+    FillStripPart(255, 0, 0, 0, LED_LAST);
+    timerCalibLED.doDelay();
+    FillStripPart(1, 0, 0, 0, LED_LAST);
+    timerCalibLED.doDelay();
+  }
+  
 }
 
 void LedClawAction()
@@ -98,7 +122,7 @@ void LedClawAction()
   for(int i = 0; i<20; i++) //20 for test SHOULD TIME IT after claw touches down
   {
     FillStripPart(255, 0, 255, 0, LED_LAST);
-    delay(50);
+    timerLEDlongDelay.doDelay();
   }
 }
 
@@ -129,19 +153,20 @@ void setup()
   strip.show(); // Initialize all pixels to 'off'
   //Debug:
   #ifdef DEBUG
-  Serial.begin(115200);
-  Serial.println("BASE SETUP RAN");
+    Serial.begin(115200);
+    Serial.println("BASE SETUP RAN");
   #endif // DEBUG
   
-    #ifdef DEBUG
+  #ifdef DEBUG
+    #ifdef MUSIC
     Serial.println("Music test");
     msgMusic.setCalibrationMusic();
     Serial.println("SET");
 
     msgMusic.sendMsg();
     Serial.println("Music test SENT");
-
-    #endif // DEBUG
+    #endif // MUSIC
+  #endif // DEBUG
 
   //Calibration init
   int time = millis();
@@ -152,7 +177,7 @@ void setup()
     //don't forget to start gameplay music as well, if no calibration is done
   }
   doCalibration();
-  FillStripPartSlow(180, 0, 255, 0, LED_LAST);
+  FillStripPartSlow(0, 0, 255, 0, LED_LAST);
   FillStripPartSlow(1, 1, 1, 0, LED_LAST);
 
 }
@@ -184,8 +209,10 @@ void MoveDown()
 //stops inputs for a while
 void ClawAction()
 {
-  msgMusic.setClawActionMusic();
-  msgMusic.sendMsg();
+  #ifdef MUSIC
+    msgMusic.setClawActionMusic();
+    msgMusic.sendMsg();
+  #endif // MUSIC
   //msgMove.setClawDown();
   msgMove.setButtonPushed();
   msgMove.sendMsg(COMMUNICATION_MOVEMENT);
@@ -206,14 +233,23 @@ void ClawAction()
   #ifdef DEBUG
   timer5seconds.doDelay();
   #endif // DEBUG
-  msgMusic.setPrizeDropMusic();
-  msgMusic.sendMsg();
+
+  #ifdef MUSIC
+    msgMusic.setPrizeDropMusic();
+    msgMusic.sendMsg();
+  #endif //MUSIC
+
+
  // wait
  #ifdef DEBUG
   timer5seconds.doDelay();
   #endif // DEBUG
-  msgMusic.setGamePlayMusic();
-  msgMusic.sendMsg();
+
+  #ifdef MUSIC
+    msgMusic.setGamePlayMusic();
+    msgMusic.sendMsg();
+  #endif //MUSIC
+
 }
 
 bool containsGivenBits(uint8_t inThis, uint8_t contained)
@@ -243,7 +279,7 @@ void sendCheckCalibState(Move &moveObject, void (Move::*function)(), Claw_Calibr
     timerCalibReadWrite.doDelay();
     msgMove.readFromSlave();
     #ifdef DEBUG
-    Serial.println("sendCheckCalibState");
+      Serial.println("sendCheckCalibState");
     #endif // DEBUG
   }
 }
@@ -251,8 +287,10 @@ void sendCheckCalibState(Move &moveObject, void (Move::*function)(), Claw_Calibr
 void doCalibration()
 {
   //INIT CALIB
-  msgMusic.setCalibrationMusic();
-  msgMusic.sendMsg();
+  #ifdef MUSIC
+    msgMusic.setCalibrationMusic();
+    msgMusic.sendMsg();
+  #endif // MUSIC
   sendCheckCalibState(msgMove, &Move::initCalibration, Claw_Calibration::CLAW_CALIB_INIT);
   
 
@@ -260,7 +298,7 @@ void doCalibration()
   sendCheckCalibState(msgMove, &Move::startTopCalib, Claw_Calibration::CLAW_CALIB_TOP_STATE_IN_PROGRESS);
 
   //give some indication that calibration has started
-  FillStripPart(19, 0, 255, 0, LED_LAST);
+  FillStripPart(25, 50, 0, 0, LED_LAST);
 
   while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
@@ -273,8 +311,8 @@ void doCalibration()
 
     if(msgMove.getButtonState() == Main_Button::PUSHED) 
     { 
-      FillStripPart(255, 0, 0, 0, LED_LAST);
-      delay(2500);
+      FillStripPartSlow(0, 255, 0, 0, LED_LAST);
+      timerCalibLED.doDelay();
 
       //DONE TOP -- this will escape the while loop:
       sendCheckCalibState(msgMove, &Move::topCalibDone, Claw_Calibration::CLAW_CALIB_TOP_DONE);
@@ -282,7 +320,7 @@ void doCalibration()
   }
   //we exit while loop when something is bad or CALIB TOP IS DONE
   #ifdef DEBUG
-  Serial.println("CALIB TOP IS DONE ---------- OR BAD CALIB");
+    Serial.println("CALIB TOP IS DONE ---------- OR BAD CALIB");
   #endif // DEBUG
   //test
     FillStripPart(0, 255, 80, 0, LED_LAST);
@@ -290,7 +328,7 @@ void doCalibration()
   if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
   {
     //do some error handling stuff
-    FillStripPart(1, 1, 1, 0, LED_LAST);
+    ErrorLed();//not exiting code
   }
   else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
@@ -299,7 +337,7 @@ void doCalibration()
     sendCheckCalibState(msgMove, &Move::startDownCalib, Claw_Calibration::CLAW_CALIB_DOWN_STATE_IN_PROGRESS);
 
     //give indication of that calibration is in the next phase
-    FillStripPart(80, 0, 255, 0, LED_LAST);
+    FillStripPart(80, 20, 160, 0, LED_LAST);
 
     while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
@@ -310,8 +348,8 @@ void doCalibration()
       msgMove.sendMsg(COMMUNICATION_MOVEMENT);
       if(msgMove.getButtonState() == Main_Button::PUSHED) 
       {
-        FillStripPart(255, 0, 0, 0, LED_LAST);
-        delay(2500);
+        FillStripPartSlow(0, 255, 0, 0, LED_LAST);
+        timerCalibLED.doDelay();
         //DONE_DOWN -- this will escape the while loop:
         sendCheckCalibState(msgMove, &Move::downCalibDone, Claw_Calibration::CLAW_CALIB_DOWN_DONE);
       }
@@ -324,16 +362,17 @@ void doCalibration()
     if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
     {
       //do some error handling stuff
-      FillStripPart(1, 1, 1, 0, LED_LAST);
-
+      ErrorLed();//not exiting code
     }
     else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
       //when we get here TOP is already done, and DOWN was just done
       //CALIB_DONE:
       sendCheckCalibState(msgMove, &Move::finishCalibration, (Claw_Calibration::CLAW_CALIB_DOWN_DONE | Claw_Calibration::CLAW_CALIB_TOP_DONE));
-      msgMusic.setGamePlayMusic();
-      msgMusic.sendMsg();
+      #ifdef MUSIC
+        msgMusic.setGamePlayMusic();
+        msgMusic.sendMsg();
+      #endif // MUSIC
     }
   }
 }

@@ -247,6 +247,9 @@ class Move
 
     Claw_Calibration Move::getClawCalibState()
     {
+        #ifdef DEBUG
+            Serial.println(_clawCalibState, BIN);
+        #endif // DEBUG
         return _clawCalibState;
     }
 
