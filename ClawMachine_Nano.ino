@@ -22,20 +22,20 @@
 
 //nth LED, we can use these to light up appropaite LEDs for left, right, up, down movements
 #define LED_LEFT_MIN 0
-#define LED_LEFT_MAX 20
-#define LED_RIGHT_MIN 21
-#define LED_RIGHT_MAX 40
-#define LED_UP_MIN 41
-#define LED_UP_MAX 60
-#define LED_DOWN_MIN 61
-#define LED_DOWN_MAX 80
+#define LED_LEFT_MAX 10
+#define LED_RIGHT_MIN 11
+#define LED_RIGHT_MAX 20
+#define LED_UP_MIN 21
+#define LED_UP_MAX 30
+#define LED_DOWN_MIN 31
+#define LED_DOWN_MAX 40
 
-#define LED_LAST 88
+#define LED_LAST 50
 #define LED_BRIGHTNESS 50
 
-#define START_UP_CALIB_TIME_MS 3000
+#define START_UP_CALIB_TIME_MS 500 //should be bigger in final 
 #define CALIB_MSG_DELAY_MICROSECONDS 2500 //for resending msg
-#define CALIB_MSG_WRITE_READ_MILLISECONDS 50 //amount of time between reads
+#define CALIB_MSG_WRITE_READ_MILLISECONDS 330 //amount of time between reads
 #define CALIB_LED_TIMER_MS 1500 //amount of time between calibration states
 #define LED_DELAY_MS 1
 #define LED_LONG_DELAY_MS 40
@@ -185,25 +185,25 @@ void setup()
 void MoveLeft()
 {
   msgMove.setLeft();
-  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_LEFT_MIN, LED_LEFT_MAX);
+  if(!Move::isClawCalibSet(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_LEFT_MIN, LED_LEFT_MAX);
 }
 
 void MoveRight()
 {
   msgMove.setRight();
-  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_RIGHT_MIN, LED_RIGHT_MAX);
+  if(!Move::isClawCalibSet(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_RIGHT_MIN, LED_RIGHT_MAX);
 }
 
 void MoveUp()
 {
   msgMove.setUp();
-  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_UP_MIN, LED_UP_MAX);
+  if(!Move::isClawCalibSet(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_UP_MIN, LED_UP_MAX);
 }
 
 void MoveDown()
 {
   msgMove.setDown();
-  if(!containsGivenBits(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_DOWN_MIN, LED_DOWN_MAX);
+  if(!Move::isClawCalibSet(msgMove.getClawCalibState(), Claw_Calibration::CLAW_CALIB_INIT)) FillStripPart(0, 255, 0, LED_DOWN_MIN, LED_DOWN_MAX);
 }
 
 //stops inputs for a while
@@ -215,13 +215,13 @@ void ClawAction()
   #endif // MUSIC
   //msgMove.setClawDown();
   msgMove.setButtonPushed();
-  msgMove.sendMsg(COMMUNICATION_MOVEMENT);
+  msgMove.sendControllMsg();
   /* for now switch it off
   LedClawAction(); //contains delay have to send msg beforehand!
   digitalWrite(CLAW_PIN, HIGH); //Closes claw
   FillStripPart(255, 255, 255, 0, LED_LAST); //White light to see everything nice and clear
   msgMove.setClawUp();
-  msgMove.sendMsg(COMMUNICATION_MOVEMENT);
+  msgMove.sendControllMsg();
   delay(2000); //will see the numbers
   //will need some iteration
   msgMove.setLeft();
@@ -231,7 +231,7 @@ void ClawAction()
   */
  //somewhere after homing to drop point
   #ifdef DEBUG
-  timer5seconds.doDelay();
+  //timer5seconds.doDelay();
   #endif // DEBUG
 
   #ifdef MUSIC
@@ -242,7 +242,7 @@ void ClawAction()
 
  // wait
  #ifdef DEBUG
-  timer5seconds.doDelay();
+  //timer5seconds.doDelay();
   #endif // DEBUG
 
   #ifdef MUSIC
@@ -252,30 +252,19 @@ void ClawAction()
 
 }
 
-bool containsGivenBits(uint8_t inThis, uint8_t contained)
-{
-  uint8_t temp = inThis & contained;
-  if(temp == contained)
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
 /// @brief THIS WILL NOT RETURN until it was verified that the message got to target IC
 /// @param moveObject the Move object on which we want to call function
 /// @param function this function of the Move object will be called
 /// @param calbiStateToCheck function will not return untill this calibration state is read from target IC
 void sendCheckCalibState(Move &moveObject, void (Move::*function)(), Claw_Calibration calbiStateToCheck)
 {
-  while(!containsGivenBits(msgMove.getMovementState().calibState, calbiStateToCheck))
+    #ifdef DEBUG
+      //Serial.println("sendCheckCalibStateBEGIN");
+    #endif // DEBUG
+  while(!Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, calbiStateToCheck))
   {
     (moveObject.*function)();
-    moveObject.sendMsg(COMMUNICATION_CALIBRATION);
-    //timerCalibMicro.doDelay();
+    moveObject.sendControllMsg();
     timerCalibReadWrite.doDelay();
     msgMove.readFromSlave();
     #ifdef DEBUG
@@ -300,16 +289,16 @@ void doCalibration()
   //give some indication that calibration has started
   FillStripPart(25, 50, 0, 0, LED_LAST);
 
-  while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
+  while(!Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
     timerCalibReadWrite.doDelay(); //we only read after some ms so and repeat, 
     msgMove.readFromSlave(); //we will need this for time estimation
     msgMove.setDefaultValues();
     refreshButtonState();
-    msgMove.sendMsg(COMMUNICATION_MOVEMENT); //we also have to put out the movement commands
+    msgMove.sendControllMsg(); //we also have to put out the movement commands
   //test
 
-    if(msgMove.getButtonState() == Main_Button::PUSHED) 
+    if(Move::isClawControllSet(msgMove.getClawControllState(), Claw_Controll_State::CLAW_CONTROLL_STATE_BUTTON)) 
     { 
       FillStripPartSlow(0, 255, 0, 0, LED_LAST);
       timerCalibLED.doDelay();
@@ -325,12 +314,12 @@ void doCalibration()
   //test
     FillStripPart(0, 255, 80, 0, LED_LAST);
 
-  if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
+  if(Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, Claw_Calibration::CLAW_CALIB_BAD))
   {
     //do some error handling stuff
     ErrorLed();//not exiting code
   }
-  else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
+  else if(Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, Claw_Calibration::CLAW_CALIB_TOP_DONE))
   {
     zCurrentlyAt = 0; //do we need this here?
     //START_DOWN_CALIB:
@@ -339,14 +328,14 @@ void doCalibration()
     //give indication of that calibration is in the next phase
     FillStripPart(80, 20, 160, 0, LED_LAST);
 
-    while(!containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
+    while(!Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
       timerCalibReadWrite.doDelay();
       msgMove.readFromSlave();
       msgMove.setDefaultValues();
       refreshButtonState();
-      msgMove.sendMsg(COMMUNICATION_MOVEMENT);
-      if(msgMove.getButtonState() == Main_Button::PUSHED) 
+      msgMove.sendControllMsg();
+      if(Move::isClawControllSet(msgMove.getClawControllState(), Claw_Controll_State::CLAW_CONTROLL_STATE_BUTTON)) 
       {
         FillStripPartSlow(0, 255, 0, 0, LED_LAST);
         timerCalibLED.doDelay();
@@ -360,12 +349,12 @@ void doCalibration()
       Serial.println("CALIB DOWN IS DONE ---------- OR BAD CALIB");
     #endif // DEBUG
 
-    if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
+    if(Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, Claw_Calibration::CLAW_CALIB_BAD))
     {
       //do some error handling stuff
       ErrorLed();//not exiting code
     }
-    else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
+    else if(Move::isClawCalibSet(msgMove.getMovementStateFromUno().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
       #ifdef DEBUG
         Serial.println("About to send finish calibration command.");
@@ -421,7 +410,7 @@ void loop()
 {
   msgMove.setDefaultValues();
   refreshButtonState();
-  msgMove.sendMsg(COMMUNICATION_MOVEMENT);
+  msgMove.sendControllMsg();
   msgMove.readFromSlave();  //maybe can be removed from here if it only provides Z direction data
   FillStripPart(1, 1, 1, 0, LED_LAST);
 }
