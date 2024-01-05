@@ -29,13 +29,13 @@ enum class Claw_Direction : uint8_t
 
 enum Claw_Calibration : uint8_t //last time it only built if this was after the operators, now only this .... -.-
 {
-    CLAW_CALIB_IDLE_STATE = 0,
-    CLAW_CALIB_INIT = 1,
-    CLAW_CALIB_TOP_STATE_IN_PROGRESS = 6,
-    CLAW_CALIB_DOWN_STATE_IN_PROGRESS = 14,
-    CLAW_CALIB_BAD = 32,
-    CLAW_CALIB_TOP_DONE = 64,
-    CLAW_CALIB_DOWN_DONE = 128
+    CLAW_CALIB_IDLE_STATE =             0b00000000,
+    CLAW_CALIB_INIT =                   0b00000001,
+    CLAW_CALIB_TOP_STATE_IN_PROGRESS =  0b00000010,
+    CLAW_CALIB_DOWN_STATE_IN_PROGRESS = 0b00000100,
+    CLAW_CALIB_BAD =                    0b00100000,
+    CLAW_CALIB_TOP_DONE =               0b01000000,
+    CLAW_CALIB_DOWN_DONE =              0b10000000
 };
 
 Claw_Calibration operator|(Claw_Calibration left, Claw_Calibration right)
@@ -118,7 +118,7 @@ class Move
     Claw_Calibration _clawCalibState = Claw_Calibration::CLAW_CALIB_IDLE_STATE;
     Main_Button _mainButton = Main_Button::NOT_PUSHED;
     MovementDataPack _movementMessage;
-    MillisTimer timer; //cleaning up remnant delay functions
+    MillisTimer timer; //inited to 2 ms |cleaning up remnant delay functions
 
 };
 
@@ -185,7 +185,7 @@ class Move
         Wire.endTransmission(true);
         timer.doDelay();
         #ifdef DEBUG
-        Serial.println("MOVE -- Done Writing to SLAVE");
+            //Serial.println("MOVE -- Done Writing to SLAVE");
         #endif // DEBUG
     }
 
@@ -196,7 +196,7 @@ class Move
         Wire.readBytes((byte*) &_movementMessage, sizeof(MovementDataPack));
         timer.doDelay();
         #ifdef DEBUG
-        Serial.println("MOVE / DATA_PACK -- Done reading from SLAVE");
+            //Serial.println("MOVE / DATA_PACK -- Done reading from SLAVE");
         #endif // DEBUG
     }
 

@@ -35,7 +35,7 @@
 
 #define START_UP_CALIB_TIME_MS 3000
 #define CALIB_MSG_DELAY_MICROSECONDS 2500 //for resending msg
-#define CALIB_MSG_WRITE_READ_MILLISECONDS 100 //amount of time between reads
+#define CALIB_MSG_WRITE_READ_MILLISECONDS 50 //amount of time between reads
 #define CALIB_LED_TIMER_MS 1500 //amount of time between calibration states
 #define LED_DELAY_MS 1
 #define LED_LONG_DELAY_MS 40
@@ -354,11 +354,12 @@ void doCalibration()
         sendCheckCalibState(msgMove, &Move::downCalibDone, Claw_Calibration::CLAW_CALIB_DOWN_DONE);
       }
     }
-
     //we exit while loop when something is bad or CALIB DOWN IS DONE
+
     #ifdef DEBUG
-    Serial.println("CALIB DOWN IS DONE ---------- OR BAD CALIB");
+      Serial.println("CALIB DOWN IS DONE ---------- OR BAD CALIB");
     #endif // DEBUG
+
     if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_BAD))
     {
       //do some error handling stuff
@@ -366,9 +367,18 @@ void doCalibration()
     }
     else if(containsGivenBits(msgMove.getMovementState().calibState, Claw_Calibration::CLAW_CALIB_DOWN_DONE))
     {
+      #ifdef DEBUG
+        Serial.println("About to send finish calibration command.");
+      #endif // DEBUG
+
       //when we get here TOP is already done, and DOWN was just done
       //CALIB_DONE:
       sendCheckCalibState(msgMove, &Move::finishCalibration, (Claw_Calibration::CLAW_CALIB_DOWN_DONE | Claw_Calibration::CLAW_CALIB_TOP_DONE));
+
+      #ifdef DEBUG
+        Serial.println("Finish calibration command sent.");
+      #endif // DEBUG
+
       #ifdef MUSIC
         msgMusic.setGamePlayMusic();
         msgMusic.sendMsg();
