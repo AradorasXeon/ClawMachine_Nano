@@ -4,7 +4,7 @@
 #include "communication.h"
 #include "communicationMusic.h"
 #include "timer.h"
-#include "millisTimer.h"
+#include "millisTimer.hpp"
 
 #ifdef __AVR__
   #include <avr/power.h>

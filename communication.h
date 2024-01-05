@@ -1,5 +1,5 @@
 #include <Wire.h>
-#include "millisTimer.h"
+#include "millisTimer.hpp"
 
 #define COMMUNICATION_MOVEMENT 0u
 #define COMMUNICATION_CALIBRATION 1u
